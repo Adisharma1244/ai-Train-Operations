@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Indian Railways AI Block Planning Engine</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4cc3ff" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 20l2-4M16 20l-2-4M9 13h.01M15 13h.01"/></svg>
+    </div>
+    <div>
+      <h1>Indian Railways AI Block Planning Engine</h1>
+      <div class="sub">Centralized Maintenance Control Room &middot; Northern Railway, Delhi&ndash;Dehradun corridor</div>
+    </div>
+  </div>
+  <span class="badge b-green"><span class="dot"></span>Network Online</span>
+  <div class="metrics" aria-label="Key metrics">
+    <div class="metric"><b id="mPunct">98.4%</b><span>Punctuality rate</span></div>
+    <div class="metric"><b id="mActive">18</b><span>Active trains</span></div>
+    <div class="metric"><b id="mDelay">0</b><span>Delayed trains</span></div>
+    <div class="metric"><b id="mBlocks">3</b><span>Blocks locked today</span></div>
+  </div>
+  <div id="clock">--:--:-- IST</div>
+</header>
+
+<main>
+  <!-- LEFT: Live Track Monitor -->
+  <section class="card" aria-labelledby="tmH">
+    <div class="card-h">
+      <h2 id="tmH">Live track monitor</h2>
+      <span class="badge b-green" id="tmBadge">All running</span>
+    </div>
+    <p class="hint">Select a train to view its route and the maintenance section on the map.</p>
+    <ul class="trains" id="trainList"></ul>
+  </section>
+
+  <!-- MIDDLE: Block Request Form -->
+  <section class="card" aria-labelledby="frH">
+    <div class="card-h"><h2 id="frH">Block request</h2><span class="sub">Form MB-07</span></div>
+    <div class="card-b">
+      <div class="field">
+        <label for="track">Track section</label>
+        <select id="track">
+          <option value="1A">Track 1A - Haridwar Outer</option>
+          <option value="2B">Track 2B - Raiwala Yard</option>
+          <option value="3C">Track 3C - Doiwala Section</option>
+          <option value="4D">Track 4D - Roorkee Up Line</option>
+          <option value="5E">Track 5E - Laksar Junction</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="dur">Requested duration</label>
+        <select id="dur">
+          <option value="90">1.5 hours</option>
+          <option value="120" selected>2 hours</option>
+          <option value="180">3 hours</option>
+          <option value="240">4 hours</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="lbl">Departments</span>
+        <div class="checks">
+          <label class="check"><input type="checkbox" name="dept" value="Engineering (Track)" checked> Engineering (Track)<small>PWAY</small></label>
+          <label class="check"><input type="checkbox" name="dept" value="Electrical (OHE)" checked> Electrical (OHE)<small>25 kV</small></label>
+          <label class="check"><input type="checkbox" name="dept" value="S&amp;T (Signal)" checked> S&amp;T (Signal)<small>Interlocking</small></label>
+        </div>
+      </div>
+      <div class="field">
+        <div class="toggle-row">
+          <label for="emerg">Emergency breakdown</label>
+          <span class="toggle-right">
+            <span id="emState">No</span>
+            <span class="sw"><input type="checkbox" id="emerg" role="switch"><span></span></span>
+          </span>
+        </div>
+      </div>
+      <button class="btn btn-go" id="runBtn" type="button">RUN AI AUTO-PLANNER</button>
+      <button class="btn btn-red" id="delayBtn" type="button">SIMULATE LIVE TRAIN DELAY</button>
+      <div class="log" id="log" aria-live="polite"><div>Control room session started. Awaiting block request.</div></div>
+    </div>
+  </section>
+
+  <!-- RIGHT: AI Optimization Output -->
+  <section class="card col-out" aria-labelledby="opH">
+    <div class="card-h"><h2 id="opH">AI optimization output</h2><span class="badge b-amber" id="opBadge">Idle</span></div>
+    <div class="card-b">
+      <div class="empty" id="empty">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#8197b5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <strong>No block planned yet</strong>
+        Choose a track section and duration, then run the AI auto-planner to see a conflict-free shadow slot.
+      </div>
+      <div class="spin" id="spin"><div class="ring"></div>Checking train paths against department work plans&hellip;</div>
+
+      <div class="out" id="out">
+        <div class="source" id="source"></div>
+        <div class="rc rc-g">
+          <h3><span>Recommended shadow slot</span><span id="conf"></span></h3>
+          <div class="slot" id="slotTime"></div>
+          <p id="slotNote"></p>
+        </div>
+        <div class="rc rc-a">
+          <h3><span>Speed regulation &amp; rerouting</span><span id="impactTag"></span></h3>
+          <ul id="instr"></ul>
+        </div>
+        <div class="grid2">
+          <div class="kpi good"><small>Downtime saved</small><b id="kSaved">0 min</b><div class="cmp" id="kSavedCmp"></div></div>
+          <div class="kpi good"><small>Zero delays</small><b id="kZero">0 trains</b><div class="cmp" id="kZeroCmp"></div></div>
+          <div class="kpi"><small>Block window</small><b id="kBefore">-</b><div class="cmp">Manual plan</div></div>
+          <div class="kpi"><small>Block window</small><b id="kAfter" class="accent-g">-</b><div class="cmp">AI optimised</div></div>
+        </div>
+        <button class="btn btn-lock" id="lockBtn" type="button">APPROVE &amp; LOCK BLOCK</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- Map modal -->
+<div id="mapModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
+  <div class="modal-box">
+    <div class="modal-h">
+      <div>
+        <h2 id="mapTitle">Route map</h2>
+        <div class="sub" id="mapSub"></div>
+      </div>
+      <button type="button" class="modal-x" id="mapClose" aria-label="Close map">&times;</button>
+    </div>
+    <div id="map"></div>
+    <div class="legend">
+      <span><i class="sw-line sw-blue"></i>Delhi&ndash;Dehradun route</span>
+      <span><i class="sw-line sw-red"></i>Maintenance section</span>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+
+<script src="config.js"></script>
+</body>
+</html>
+
